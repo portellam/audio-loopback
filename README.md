@@ -6,8 +6,8 @@
 ## How-to
 ### To install script:
 
-        sudo bash install.bash -i
+        sudo bash installer.bash -i
 
 ### To uninstall script:
 
-        sudo bash install.bash -u
+        sudo bash installer.bash -u
