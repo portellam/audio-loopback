@@ -1,0 +1,11 @@
+[Unit]
+Description=Create audio loopback device(s). Bind audio input(s) to first parsed active output.
+After=pulseaudio.service
+
+[Service]
+Type=simple
+ExecStart=/bin/bash /usr/local/bin/create-audio-loopback
+ExecStop=/bin/bash /usr/local/bin/destroy-audio-loopback
+
+[Install]
+WantedBy=default.target
