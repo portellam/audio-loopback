@@ -7,6 +7,9 @@
 # Maintainer(s):  Alex Portell <github.com/portellam>
 #
 
+# TODO: update installer. See other repos for inspiration.
+exit 1
+
 # <functions>
   function main
   {
