@@ -2,7 +2,7 @@
 
 #
 # Filename:       /usr/local/bin/destroy-audio-loopback
-# Description:    Terminate audio loopback devices.
+# Description:    Terminate audio loopback device(s).
 # Author(s):      Alex Portell <github.com/portellam>
 # Maintainer(s):  Alex Portell <github.com/portellam>
 #
