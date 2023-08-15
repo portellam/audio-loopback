@@ -1,0 +1,202 @@
+#!/bin/bash/env bash
+
+#
+# Filename:       /usr/local/bin/create-audio-loopback
+# Description:    Create audio loopback devices.
+# Author(s):      Alex Portell <github.com/portellam>
+# Maintainer(s):  Alex Portell <github.com/portellam>
+#
+
+# <traps>
+  trap 'catch_error' SIGINT SIGTERM ERR
+  trap 'catch_exit' EXIT
+# </traps>
+
+# <params>
+  readonly SCRIPT_NAME="$( basename "${0}" )"
+  readonly PREFIX_PROMPT="${SCRIPT_NAME}: "
+
+  # <summary>Preserve internal field separator</summary>
+    readonly SAVEIFS="${IFS}"
+    IFS=$'\n'
+
+  # <summary>
+  # Color coding
+  # Reference URL: 'https://www.shellhacks.com/bash-colors'
+  # </summary>
+    readonly SET_COLOR_GREEN='\033[0;32m'
+    readonly SET_COLOR_RED='\033[0;31m'
+    readonly SET_COLOR_YELLOW='\033[0;33m'
+    readonly RESET_COLOR='\033[0m'
+
+  # <summary>Append output</summary>
+    readonly PREFIX_ERROR="${SET_COLOR_RED}An error occurred:${RESET_COLOR} "
+    readonly PREFIX_FAIL="${SET_COLOR_RED}Failure:${RESET_COLOR} "
+    readonly PREFIX_PASS="${SET_COLOR_GREEN}Success:${RESET_COLOR} "
+
+  readonly AUDIO_INPUT_LIST=( "$( pactl list short sources | grep --extended-regexp --ignore-case 'analog' | grep --extended-regexp --ignore-case 'input' )" )
+  readonly ACTIVE_AUDIO_OUTPUT_LIST=( "$( pactl list short sinks | grep 'RUNNING' )" )
+  readonly INACTIVE_AUDIO_OUTPUT_LIST=( "$( pactl list short sinks | grep --invert-match 'RUNNING' )" )
+  VIRTUAL_BRIDGES_LIST=( )
+# </params>
+
+# <functions>
+  function main
+  {
+    if ! create_all_virtual_audio_bridges \
+      || ! bind_all_audio_outputs_to_all_bridges; then
+      exit 1
+    fi
+
+    exit 0
+  }
+
+  # <summary>Clean-up</summary>
+    function reset_ifs
+    {
+      IFS="${SAVEIFS}"
+    }
+
+  # <summary>Data-type validation</summary>
+    function is_enum
+    {
+      local -n this_enum="${1}"
+
+      if ! [[ "${#this_enum[@]}" -gt 0 ]]; then
+        return 1
+      fi
+    }
+
+    function is_enum_empty
+    {
+      is_enum "${1}" || return 1
+      local -n this_enum="${1}"
+
+      for value in "${this_enum[@]}"; do
+        if ! [[ ! -z "${value}" ]]; then
+          return 1
+        fi
+      done
+    }
+
+  # <summary>Handlers</summary>
+    function catch_error {
+      exit 255
+    }
+
+    function catch_exit {
+      print_pass_or_fail
+      reset_ifs
+    }
+
+    function is_user_superuser
+    {
+      if [[ $( whoami ) != "root" ]]; then
+        print_to_error_log "User is not sudo or root."
+        return 1
+      fi
+    }
+
+  # <summary>Loggers</summary>
+    function print_to_error_log
+    {
+      echo -e "${PREFIX_PROMPT}${PREFIX_ERROR}${1}" >&2
+    }
+
+    function print_to_output_log
+    {
+      echo -e "${PREFIX_PROMPT}${1}" >&1
+    }
+
+    function print_pass_or_fail
+    {
+      if [[ "${?}" -ne 0 ]]; then
+        print_to_output_log "${PREFIX_FAIL}Setup incomplete."
+        return 1
+      fi
+
+      print_to_output_log "${PREFIX_PASS}Setup complete."
+    }
+
+  # <summary>Bind to bridge logic</summary>
+    function bind_all_audio_outputs_to_all_bridges
+    {
+      local -n audio_output_list=""
+
+      if is_enum_empty "ACTIVE_AUDIO_OUTPUT_LIST" \
+        && is_enum_empty "INACTIVE_AUDIO_OUTPUT_SOURCES_LIST"; then
+        print_error_to_log "No audio outputs."
+        return 1
+      fi
+
+      if is_enum_empty "ACTIVE_AUDIO_OUTPUT_LIST"; then
+        audio_output_list="INACTIVE_AUDIO_OUTPUT_SOURCES_LIST"
+        print_error_to_log "No active audio outputs. Parsing inactive audio outputs."
+      else
+        audio_output_list="ACTIVE_AUDIO_OUTPUT_LIST"
+        print_prompt_to_log "Parsing active audio outputs."
+      fi
+
+      for audio_output in "${audio_output_list[@]}"; do
+        local audio_output_name="$( echo "${audio_output}" | awk '{print $2}' )"
+        bind_this_audio_output_to_all_bridges "${audio_output_name}" || return 1
+      done
+    }
+
+    function bind_this_audio_output_to_all_bridges
+    {
+      local -r this_audio_output_name="${1}"
+
+      for virtual_bridge in "${VIRTUAL_BRIDGES_LIST[@]}"; do
+        bind_this_audio_output_to_this_bridge "${this_audio_output_name}" "${virtual_bridge}" || return 1
+      done
+    }
+
+    function bind_this_audio_output_to_this_bridge
+    {
+      local -r this_audio_output_name="${1}"
+      local -r this_virtual_bridge="${2}"
+
+      if ! pactl load-module module-loopback source="${this_audio_output_name}" sink="${this_virtual_bridge}" &> /dev/null; then
+        print_error_to_log "Failed to bind audio output '${this_audio_output_name}' to virtual bridge '${this_virtual_bridge}'."
+        return 1
+      fi
+
+      print_prompt_to_log "Binded audio output '${this_audio_output_name}' to virtual bridge '${this_virtual_bridge}'."
+    }
+
+  # <summary>Create bridge logic</summary>
+    function create_all_virtual_audio_bridges
+    {
+      for audio_input in "${AUDIO_INPUT_LIST[@]}"; do
+        local -i audio_input_index="$( echo "${audio_input}" | awk '{print $1}' )"
+        local audio_input_name="$( echo "${audio_input}" | awk '{print $2}' )"
+        create_this_virtual_audio_bridge "${audio_input_index}" "${audio_input_name}" || return 1
+      done
+    }
+
+    function create_this_virtual_audio_bridge
+    {
+      local -ir this_audio_input_index="${1}"
+      local -r this_audio_input_name="${2}"
+      local -r virtual_bridge_name="input_${this_audio_input_index}"
+
+      if ! pactl load-module module-virtual-sink sink_name="${virtual_audio_bridge}" &> /dev/null; then
+        print_error_to_log "Failed to create virtual audio bridge for '${this_audio_input_name}'."
+        return 1
+      fi
+
+      add_virtual_audio_bridge_to_list "${virtual_bridge_name}"
+      print_prompt_to_log "Created virtual audio bridge for '${this_audio_input_name}'."
+    }
+
+  function add_virtual_audio_bridge_to_list
+  {
+    local -r virtual_bridge="${1}"
+    VIRTUAL_BRIDGES_LIST+=( "${virtual_bridge}" )
+  }
+# </functions>
+
+# <code>
+  main
+# </code

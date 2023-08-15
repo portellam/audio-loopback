@@ -1,0 +1,151 @@
+#!/bin/bash/env bash
+
+#
+# Filename:       /usr/local/bin/destroy-audio-loopback
+# Description:    Terminate audio loopback devices.
+# Author(s):      Alex Portell <github.com/portellam>
+# Maintainer(s):  Alex Portell <github.com/portellam>
+#
+
+# <traps>
+  trap 'catch_error' SIGINT SIGTERM ERR
+  trap 'catch_exit' EXIT
+# </traps>
+
+# <params>
+  readonly SCRIPT_NAME="$( basename "${0}" )"
+  readonly PREFIX_PROMPT="${SCRIPT_NAME}: "
+
+  # <summary>Preserve internal field separator</summary>
+    readonly SAVEIFS="${IFS}"
+    IFS=$'\n'
+
+  # <summary>
+  # Color coding
+  # Reference URL: 'https://www.shellhacks.com/bash-colors'
+  # </summary>
+    readonly SET_COLOR_GREEN='\033[0;32m'
+    readonly SET_COLOR_RED='\033[0;31m'
+    readonly SET_COLOR_YELLOW='\033[0;33m'
+    readonly RESET_COLOR='\033[0m'
+
+  # <summary>Append output</summary>
+    readonly PREFIX_ERROR="${SET_COLOR_RED}An error occurred:${RESET_COLOR} "
+    readonly PREFIX_FAIL="${SET_COLOR_RED}Failure:${RESET_COLOR} "
+    readonly PREFIX_PASS="${SET_COLOR_GREEN}Success:${RESET_COLOR} "
+
+  VIRTUAL_BRIDGES_LIST=( "$( pactl list short sinks | grep --ignore-case module-virtual-sink )" )
+# </params>
+
+# <functions>
+  function main
+  {
+    do_any_virtual_audio_bridges_exist || exit 0
+
+    if ! destroy_all_virtual_audio_bridges; then
+      exit 1
+    fi
+
+    exit 0
+  }
+
+  # <summary>Clean-up</summary>
+    function reset_ifs
+    {
+      IFS="${SAVEIFS}"
+    }
+
+  # <summary>Data-type validation</summary>
+    function is_enum
+    {
+      local -n this_enum="${1}"
+
+      if ! [[ "${#this_enum[@]}" -gt 0 ]]; then
+        return 1
+      fi
+    }
+
+    function is_enum_empty
+    {
+      is_enum "${1}" || return 1
+      local -n this_enum="${1}"
+
+      for value in "${this_enum[@]}"; do
+        if ! [[ ! -z "${value}" ]]; then
+          return 1
+        fi
+      done
+    }
+
+  # <summary>Handlers</summary>
+    function catch_error {
+      exit 255
+    }
+
+    function catch_exit {
+      print_pass_or_fail
+      reset_ifs
+    }
+
+    function is_user_superuser
+    {
+      if [[ $( whoami ) != "root" ]]; then
+        print_to_error_log "User is not sudo or root."
+        return 1
+      fi
+    }
+
+  # <summary>Loggers</summary>
+    function print_to_error_log
+    {
+      echo -e "${PREFIX_PROMPT}${PREFIX_ERROR}${1}" >&2
+    }
+
+    function print_to_output_log
+    {
+      echo -e "${PREFIX_PROMPT}${1}" >&1
+    }
+
+    function print_pass_or_fail
+    {
+      if [[ "${?}" -ne 0 ]]; then
+        print_to_output_log "${PREFIX_FAIL}Setup incomplete."
+        return 1
+      fi
+
+      print_to_output_log "${PREFIX_PASS}Setup complete."
+    }
+
+  # <summary>Destroy bridge logic</summary>
+    function destroy_all_virtual_audio_bridges
+    {
+      for virtual_bridge in "${VIRTUAL_BRIDGES_LIST[@]}"; do
+        local virtual_bridge_name="$( echo "${virtual_bridge}" | awk '{print $2}' )"
+        destroy_this_virtual_audio_bridge "${virtual_bridge_name}" || return 1
+      done
+    }
+
+    function destroy_this_virtual_audio_bridge
+    {
+      local -r this_virtual_bridge_name="${1}"
+
+      if ! pactl unload-module module-virtual-sink sink_name="${this_virtual_bridge_name}" &> /dev/null; then
+        print_error_to_log "Failed to destroy virtual audio bridge '${this_virtual_bridge_name}'."
+        return 1
+      fi
+
+      print_prompt_to_log "Destroyed virtual audio bridge '${this_virtual_bridge_name}'."
+    }
+
+  function do_any_virtual_audio_bridges_exist
+  {
+    if is_enum_empty "VIRTUAL_BRIDGES_LIST" &> /dev/null; then
+      print_prompt_to_log "No virtual audio bridges found."
+      return 1
+    fi
+  }
+# </functions>
+
+# <code>
+  main
+# </code
