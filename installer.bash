@@ -81,10 +81,10 @@
   function print_help
   {
     echo -e "Usage:\tbash $0 [OPTION]"
-    echo -e "Linux systemd service to start/stop an audio loopback device."
-    echo -e "  -h, --help\t\tPrint this help and exit."
+    echo -e "Linux systemd service to start/stop audio loopback device(s)."
     echo -e "  -i, --install\t\tInstall service."
     echo -e "  -u, --uninstall\tUninstall service."
+    echo -e "  -h, --help\t\tPrint this help and exit."
   }
 
   function uninstall
