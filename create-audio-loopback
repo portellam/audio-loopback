@@ -2,7 +2,9 @@
 
 #
 # Filename:       /usr/local/bin/create-audio-loopback
-# Description:    Create audio loopback devices.
+# Description:    Create audio loopback devices of input(s) and bind to first parsed active output.
+#                 If no active output is found, bind to first inactive output.
+#                 If no output is found, fail.
 # Author(s):      Alex Portell <github.com/portellam>
 # Maintainer(s):  Alex Portell <github.com/portellam>
 #
@@ -137,10 +139,9 @@
         print_prompt_to_log "Parsing active audio outputs."
       fi
 
-      for audio_output in "${audio_output_list[@]}"; do
-        local audio_output_name="$( echo "${audio_output}" | awk '{print $2}' )"
-        bind_this_audio_output_to_all_bridges "${audio_output_name}" || return 1
-      done
+      local -r first_audio_output="${audio_output_list[0]}"
+      local -r audio_output_name="$( echo "${first_audio_output}" | awk '{print $2}' )"
+      bind_this_audio_output_to_all_bridges "${audio_output_name}"
     }
 
     function bind_this_audio_output_to_all_bridges
