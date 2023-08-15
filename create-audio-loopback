@@ -2,7 +2,7 @@
 
 #
 # Filename:       /usr/local/bin/create-audio-loopback
-# Description:    Create audio loopback devices of input(s) and bind to first parsed active output.
+# Description:    Create audio loopback device(s). Bind audio input(s) to first parsed active output.
 #                 If no active output is found, bind to first inactive output.
 #                 If no output is found, fail.
 # Author(s):      Alex Portell <github.com/portellam>
