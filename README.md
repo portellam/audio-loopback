@@ -1,11 +1,9 @@
 # audio-loopback
 ## About
 ### Description:
-Linux systemd service to start/stop audio loopback device(s). Bind audio input(s) to first parsed active output.
+Linux systemd service to start/stop audio loopback device(s). Listen to your primary active audio device's Line-in.
 
-If no active output is found, bind to first inactive output.
-
-If no output is found, fail. Connect an audio source to your main audio device's Line-In.
+Bind audio input(s) to first parsed active output. If no active output is found, bind to first inactive output. If no output is found, fail.
 
 ## How-to
 ### To download, execute:
