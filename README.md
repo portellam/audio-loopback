@@ -3,4 +3,4 @@
 
 Bind audio input(s) to first parsed active output. If no active output is found, bind to first inactive output.
 
-**[~Latest release~](#https://github.com/portellam/audio-loopback/releases/latest) | [View develop branch...](https://github.com/portellam/audio-loopback/tree/develop)**
+**[~Latest release~](#audio-loopback) | [View develop branch...](https://github.com/portellam/audio-loopback/tree/develop)**
