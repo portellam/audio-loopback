@@ -7,6 +7,7 @@
 #                 If no output is found, fail.
 # Author(s):      Alex Portell <github.com/portellam>
 # Maintainer(s):  Alex Portell <github.com/portellam>
+# Version:        1.0.0
 #
 
 # <traps>
@@ -36,22 +37,33 @@
     readonly PREFIX_FAIL="${SET_COLOR_RED}Failure:${RESET_COLOR} "
     readonly PREFIX_PASS="${SET_COLOR_GREEN}Success:${RESET_COLOR} "
 
-  readonly AUDIO_INPUT_LIST=( "$( pactl list short sources | grep --extended-regexp --ignore-case 'analog' | grep --extended-regexp --ignore-case 'input' )" )
-  readonly ACTIVE_AUDIO_OUTPUT_LIST=( "$( pactl list short sinks | grep 'RUNNING' )" )
-  readonly INACTIVE_AUDIO_OUTPUT_LIST=( "$( pactl list short sinks | grep --invert-match 'RUNNING' )" )
+  AUDIO_INPUT_LIST=( )
+  ACTIVE_AUDIO_OUTPUT_LIST=( )
+  INACTIVE_AUDIO_OUTPUT_LIST=( )
   VIRTUAL_BRIDGES_LIST=( )
 # </params>
 
 # <functions>
   function main
   {
+    get_lists
+
     if ! create_all_virtual_audio_bridges \
-      || ! bind_all_audio_outputs_to_all_bridges; then
+      || ! bind_all_audio_outputs_to_all_bridges \
+      || ! do_any_virtual_audio_bridges_exist; then
       exit 1
     fi
 
     exit 0
   }
+
+  # <summary>Getters</summary>
+    function get_lists
+    {
+      AUDIO_INPUT_LIST="$( pactl list short sources | grep --extended-regexp --ignore-case 'analog' | grep --extended-regexp --ignore-case 'input' )"
+      ACTIVE_AUDIO_OUTPUT_LIST="$( pactl list short sinks | grep 'RUNNING' )"
+      INACTIVE_AUDIO_OUTPUT_LIST="$( pactl list short sinks | grep --invert-match 'RUNNING' )"
+    }
 
   # <summary>Clean-up</summary>
     function reset_ifs
@@ -65,20 +77,32 @@
       local -n this_enum="${1}"
 
       if ! [[ "${#this_enum[@]}" -gt 0 ]]; then
+        print_to_error_log "Invalid enum."
         return 1
       fi
     }
 
-    function is_enum_empty
+    function is_enum_not_empty
     {
       is_enum "${1}" || return 1
       local -n this_enum="${1}"
 
       for value in "${this_enum[@]}"; do
-        if ! [[ ! -z "${value}" ]]; then
-          return 1
+        if is_string "${value}" &> /dev/null; then
+          return 0
         fi
       done
+
+      print_to_error_log "Empty enum."
+      return 1
+    }
+
+    function is_string
+    {
+      if [[ "${1}" == "" ]]; then
+        print_to_error_log "Empty string."
+        return 1
+      fi
     }
 
   # <summary>Handlers</summary>
@@ -123,25 +147,30 @@
   # <summary>Bind to bridge logic</summary>
     function bind_all_audio_outputs_to_all_bridges
     {
-      local -n audio_output_list=""
+      local -a audio_output_list=""
 
-      if is_enum_empty "ACTIVE_AUDIO_OUTPUT_LIST" \
-        && is_enum_empty "INACTIVE_AUDIO_OUTPUT_SOURCES_LIST"; then
-        print_error_to_log "No audio outputs."
+      if ! is_enum_not_empty "ACTIVE_AUDIO_OUTPUT_LIST" &> /dev/null \
+        && ! is_enum_not_empty "INACTIVE_AUDIO_OUTPUT_SOURCES_LIST" &> /dev/null; then
+        print_to_error_log "No audio outputs."
         return 1
       fi
 
-      if is_enum_empty "ACTIVE_AUDIO_OUTPUT_LIST"; then
+      if ! is_enum_not_empty "ACTIVE_AUDIO_OUTPUT_LIST" &> /dev/null; then
         audio_output_list="INACTIVE_AUDIO_OUTPUT_SOURCES_LIST"
-        print_error_to_log "No active audio outputs. Parsing inactive audio outputs."
+        print_to_error_log "No active audio outputs. Parsing inactive audio outputs."
       else
         audio_output_list="ACTIVE_AUDIO_OUTPUT_LIST"
-        print_prompt_to_log "Parsing active audio outputs."
+        print_to_output_log "Parsing active audio outputs."
       fi
 
-      local -r first_audio_output="${audio_output_list[0]}"
-      local -r audio_output_name="$( echo "${first_audio_output}" | awk '{print $2}' )"
-      bind_this_audio_output_to_all_bridges "${audio_output_name}"
+      for audio_output in "${audio_output_list[@]}"; do
+        if ! is_string "${audio_output}" &> /dev/null; then
+          continue
+        fi
+
+        local -r audio_output_name="$( echo "${audio_output}" | awk '{print $2}' )"
+        bind_this_audio_output_to_all_bridges "${audio_output_name}"
+      done
     }
 
     function bind_this_audio_output_to_all_bridges
@@ -158,12 +187,12 @@
       local -r this_audio_output_name="${1}"
       local -r this_virtual_bridge="${2}"
 
-      if ! pactl load-module module-loopback source="${this_audio_output_name}" sink="${this_virtual_bridge}" &> /dev/null; then
-        print_error_to_log "Failed to bind audio output '${this_audio_output_name}' to virtual bridge '${this_virtual_bridge}'."
+      if ! pactl load-module module-loopback source="${this_audio_output_name}" sink="${this_virtual_bridge}"; then
+        print_to_error_log "Failed to bind audio output '${this_audio_output_name}' to virtual bridge '${this_virtual_bridge}'."
         return 1
       fi
 
-      print_prompt_to_log "Binded audio output '${this_audio_output_name}' to virtual bridge '${this_virtual_bridge}'."
+      print_to_output_log "Binded audio output '${this_audio_output_name}' to virtual bridge '${this_virtual_bridge}'."
     }
 
   # <summary>Create bridge logic</summary>
@@ -182,19 +211,27 @@
       local -r this_audio_input_name="${2}"
       local -r virtual_bridge_name="input_${this_audio_input_index}"
 
-      if ! pactl load-module module-virtual-sink sink_name="${virtual_audio_bridge}" &> /dev/null; then
-        print_error_to_log "Failed to create virtual audio bridge for '${this_audio_input_name}'."
+      if ! pactl load-module module-virtual-sink sink_name="${virtual_bridge_name}"; then
+        print_to_error_log "Failed to create virtual audio bridge for '${this_audio_input_name}'."
         return 1
       fi
 
       add_virtual_audio_bridge_to_list "${virtual_bridge_name}"
-      print_prompt_to_log "Created virtual audio bridge for '${this_audio_input_name}'."
+      print_to_output_log "Created virtual audio bridge for '${this_audio_input_name}'."
     }
 
   function add_virtual_audio_bridge_to_list
   {
     local -r virtual_bridge="${1}"
     VIRTUAL_BRIDGES_LIST+=( "${virtual_bridge}" )
+  }
+
+  function do_any_virtual_audio_bridges_exist
+  {
+    if ! is_enum_not_empty "VIRTUAL_BRIDGES_LIST" &> /dev/null; then
+      print_to_error_log "No virtual audio bridges found."
+      return 1
+    fi
   }
 # </functions>
 

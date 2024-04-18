@@ -5,6 +5,7 @@
 # Description:    Terminate audio loopback device(s).
 # Author(s):      Alex Portell <github.com/portellam>
 # Maintainer(s):  Alex Portell <github.com/portellam>
+# Version:        1.0.0
 #
 
 # <traps>
@@ -34,7 +35,7 @@
     readonly PREFIX_FAIL="${SET_COLOR_RED}Failure:${RESET_COLOR} "
     readonly PREFIX_PASS="${SET_COLOR_GREEN}Success:${RESET_COLOR} "
 
-  VIRTUAL_BRIDGES_LIST=( "$( pactl list short sinks | grep --ignore-case module-virtual-sink )" )
+  VIRTUAL_BRIDGES_LIST="$( pactl list short sinks | grep --ignore-case module-virtual-sink )"
 # </params>
 
 # <functions>
@@ -61,20 +62,32 @@
       local -n this_enum="${1}"
 
       if ! [[ "${#this_enum[@]}" -gt 0 ]]; then
+        print_to_error_log "Invalid enum."
         return 1
       fi
     }
 
-    function is_enum_empty
+    function is_enum_not_empty
     {
       is_enum "${1}" || return 1
       local -n this_enum="${1}"
 
       for value in "${this_enum[@]}"; do
-        if ! [[ ! -z "${value}" ]]; then
-          return 1
+        if is_string "${value}" &> /dev/null; then
+          return 0
         fi
       done
+
+      print_to_error_log "Empty enum."
+      return 1
+    }
+
+    function is_string
+    {
+      if [[ "${1}" == "" ]]; then
+        print_to_error_log "Empty string."
+        return 1
+      fi
     }
 
   # <summary>Handlers</summary>
@@ -119,7 +132,7 @@
   # <summary>Destroy bridge logic</summary>
     function destroy_all_virtual_audio_bridges
     {
-      for virtual_bridge in "${VIRTUAL_BRIDGES_LIST[@]}"; do
+      for virtual_bridge in ${VIRTUAL_BRIDGES_LIST[@]}; do
         local virtual_bridge_name="$( echo "${virtual_bridge}" | awk '{print $2}' )"
         destroy_this_virtual_audio_bridge "${virtual_bridge_name}" || return 1
       done
@@ -129,18 +142,18 @@
     {
       local -r this_virtual_bridge_name="${1}"
 
-      if ! pactl unload-module module-virtual-sink sink_name="${this_virtual_bridge_name}" &> /dev/null; then
-        print_error_to_log "Failed to destroy virtual audio bridge '${this_virtual_bridge_name}'."
+      if ! pactl unload-module sink_name="${this_virtual_bridge_name}"; then
+        print_to_error_log "Failed to destroy virtual audio bridge '${this_virtual_bridge_name}'."
         return 1
       fi
 
-      print_prompt_to_log "Destroyed virtual audio bridge '${this_virtual_bridge_name}'."
+      print_to_output_log "Destroyed virtual audio bridge '${this_virtual_bridge_name}'."
     }
 
   function do_any_virtual_audio_bridges_exist
   {
-    if is_enum_empty "VIRTUAL_BRIDGES_LIST" &> /dev/null; then
-      print_prompt_to_log "No virtual audio bridges found."
+    if ! is_enum_not_empty "VIRTUAL_BRIDGES_LIST" &> /dev/null; then
+      print_to_output_log "No virtual audio bridges found."
       return 1
     fi
   }

@@ -5,10 +5,17 @@
 # Description:    Installs audio-loopback service.
 # Author(s):      Alex Portell <github.com/portellam>
 # Maintainer(s):  Alex Portell <github.com/portellam>
+# Version:        1.0.0
 #
 
 # TODO: update installer. See other repos for inspiration.
+
+echo "FIXME. Exiting early."
 exit 1
+
+# <params>
+  declare -r SCRIPT_VERSION="1.0.0"
+# </params>
 
 # <functions>
   function main
@@ -85,6 +92,7 @@ exit 1
   {
     echo -e "Usage:\tbash $0 [OPTION]"
     echo -e "Linux systemd service to start/stop audio loopback device(s)."
+    echo -e "Version ${SCRIPT_VERSION}.\n"
     echo -e "  -i, --install\t\tInstall service."
     echo -e "  -u, --uninstall\tUninstall service."
     echo -e "  -h, --help\t\tPrint this help and exit."
